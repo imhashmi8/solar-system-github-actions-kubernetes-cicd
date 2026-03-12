@@ -11,7 +11,39 @@ chai.should();
 chai.use(chaiHttp); 
 
 before((done) => {
-    server = app.listen(0, done);
+    const connectTimeoutMs = 15000;
+    let timeoutId;
+
+    function cleanup() {
+        mongoose.connection.off("connected", onConnected);
+        mongoose.connection.off("error", onError);
+        clearTimeout(timeoutId);
+    }
+
+    function onConnected() {
+        cleanup();
+        done();
+    }
+
+    function onError(error) {
+        cleanup();
+        done(error);
+    }
+
+    server = app.listen(0, () => {
+        if (mongoose.connection.readyState === 1) {
+            done();
+            return;
+        }
+
+        timeoutId = setTimeout(() => {
+            cleanup();
+            done(new Error("Timed out waiting for MongoDB connection"));
+        }, connectTimeoutMs);
+
+        mongoose.connection.once("connected", onConnected);
+        mongoose.connection.once("error", onError);
+    });
 });
 
 after((done) => {
