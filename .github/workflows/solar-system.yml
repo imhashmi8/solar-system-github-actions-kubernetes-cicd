@@ -43,6 +43,6 @@ jobs:
 
 
         - name: Unit Testing
-          run: npm test
+          run: npx mocha app-test.js --timeout 10000 --reporter spec --exit
 
         
