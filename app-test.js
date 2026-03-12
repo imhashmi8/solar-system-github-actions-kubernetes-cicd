@@ -1,12 +1,27 @@
 let mongoose = require("mongoose");
-let server = require("./app");
+let app = require("./app");
 let chai = require("chai");
 let chaiHttp = require("chai-http");
+let server;
 
 
 // Assertion 
 chai.should();
 chai.use(chaiHttp); 
+
+before((done) => {
+    server = app.listen(0, done);
+});
+
+after((done) => {
+    mongoose.connection.close(() => {
+        if (server) {
+            server.close(done);
+        } else {
+            done();
+        }
+    });
+});
 
 describe('Planets API Suite', () => {
 

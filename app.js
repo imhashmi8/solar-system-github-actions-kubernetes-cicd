@@ -6,17 +6,25 @@ const mongoose = require("mongoose");
 const app = express();
 const cors = require('cors')
 
+const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/solar-system';
+const mongoOptions = {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+};
+
+if (process.env.MONGO_USERNAME) {
+    mongoOptions.user = process.env.MONGO_USERNAME;
+}
+
+if (process.env.MONGO_PASSWORD) {
+    mongoOptions.pass = process.env.MONGO_PASSWORD;
+}
 
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '/')));
 app.use(cors())
 
-mongoose.connect(process.env.MONGO_URI, {
-    user: process.env.MONGO_USERNAME,
-    pass: process.env.MONGO_PASSWORD,
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}, function(err) {
+mongoose.connect(mongoUri, mongoOptions, function(err) {
     if (err) {
         console.log("error!! " + err)
     } else {
@@ -79,9 +87,11 @@ app.get('/ready',   function(req, res) {
     });
 })
 
-app.listen(3000, () => {
-    console.log("Server successfully running on port - " +3000);
-})
-
+if (require.main === module) {
+    const port = process.env.PORT || 3000;
+    app.listen(port, () => {
+        console.log("Server successfully running on port - " + port);
+    })
+}
 
 module.exports = app;
