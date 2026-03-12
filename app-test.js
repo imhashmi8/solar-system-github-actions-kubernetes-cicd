@@ -329,7 +329,14 @@ describe('Configuration and Error Handling', () => {
     });
 
     it('returns an error message when the planet query fails', (done) => {
-        const planetModel = mongoose.model('planets');
+        const planetModel = mongoose.models.planets || mongoose.model('planets', new mongoose.Schema({
+            name: String,
+            id: Number,
+            description: String,
+            image: String,
+            velocity: String,
+            distance: String
+        }));
         const originalFindOne = planetModel.findOne;
         const originalAlert = global.alert;
 
