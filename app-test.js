@@ -3,6 +3,7 @@ let app = require("./app");
 let chai = require("chai");
 let chaiHttp = require("chai-http");
 let server;
+const appModulePath = require.resolve("./app");
 
 
 // Assertion 
@@ -15,13 +16,66 @@ before((done) => {
 
 after((done) => {
     mongoose.connection.close(() => {
-        if (server) {
+        if (server && server.listening) {
             server.close(done);
         } else {
             done();
         }
     });
 });
+
+function clearAppFromRequireCache() {
+    delete require.cache[appModulePath];
+
+    if (typeof mongoose.deleteModel === "function") {
+        try {
+            mongoose.deleteModel("planets");
+        } catch (error) {
+            // Ignore missing model cleanup during test reloads.
+        }
+    }
+}
+
+function loadAppWithMockedConnect(envOverrides, connectImpl) {
+    const originalConnect = mongoose.connect;
+    const originalEnv = {
+        MONGO_URI: process.env.MONGO_URI,
+        MONGO_USERNAME: process.env.MONGO_USERNAME,
+        MONGO_PASSWORD: process.env.MONGO_PASSWORD
+    };
+
+    process.env.MONGO_URI = envOverrides.MONGO_URI;
+    process.env.MONGO_USERNAME = envOverrides.MONGO_USERNAME;
+    process.env.MONGO_PASSWORD = envOverrides.MONGO_PASSWORD;
+    mongoose.connect = connectImpl;
+
+    clearAppFromRequireCache();
+    const loadedApp = require("./app");
+
+    mongoose.connect = originalConnect;
+
+    if (originalEnv.MONGO_URI === undefined) {
+        delete process.env.MONGO_URI;
+    } else {
+        process.env.MONGO_URI = originalEnv.MONGO_URI;
+    }
+
+    if (originalEnv.MONGO_USERNAME === undefined) {
+        delete process.env.MONGO_USERNAME;
+    } else {
+        process.env.MONGO_USERNAME = originalEnv.MONGO_USERNAME;
+    }
+
+    if (originalEnv.MONGO_PASSWORD === undefined) {
+        delete process.env.MONGO_PASSWORD;
+    } else {
+        process.env.MONGO_PASSWORD = originalEnv.MONGO_PASSWORD;
+    }
+
+    clearAppFromRequireCache();
+
+    return loadedApp;
+}
 
 describe('Planets API Suite', () => {
 
@@ -166,6 +220,17 @@ describe('Planets API Suite', () => {
 
 //Use below test case to achieve coverage
 describe('Testing Other Endpoints', () => {
+    describe('it should fetch the homepage', () => {
+        it('it should serve index.html', (done) => {
+          chai.request(server)
+              .get('/')
+              .end((err, res) => {
+                    res.should.have.status(200);
+                    res.text.should.include('Solar System');
+                done();
+              });
+        });
+    });
 
     describe('it should fetch OS Details', () => {
         it('it should fetch OS details', (done) => {
@@ -202,4 +267,53 @@ describe('Testing Other Endpoints', () => {
         });
     });
 
+});
+
+describe('Configuration and Error Handling', () => {
+    it('uses mongo credentials when they are provided', () => {
+        let capturedArgs;
+        const originalLog = console.log;
+
+        console.log = () => {};
+
+        loadAppWithMockedConnect({
+            MONGO_URI: 'mongodb://127.0.0.1:27017/solar-system',
+            MONGO_USERNAME: 'local-user',
+            MONGO_PASSWORD: 'local-pass'
+        }, (uri, options, callback) => {
+            capturedArgs = {
+                uri,
+                options
+            };
+
+            callback(new Error('mock connection failure'));
+        });
+
+        console.log = originalLog;
+
+        capturedArgs.uri.should.eql('mongodb://127.0.0.1:27017/solar-system');
+        capturedArgs.options.user.should.eql('local-user');
+        capturedArgs.options.pass.should.eql('local-pass');
+    });
+
+    it('returns an error message when the planet query fails', (done) => {
+        const planetModel = mongoose.model('planets');
+        const originalFindOne = planetModel.findOne;
+        const originalAlert = global.alert;
+
+        global.alert = () => {};
+        planetModel.findOne = (query, callback) => callback(new Error('mock query failure'));
+
+        chai.request(server)
+            .post('/planet')
+            .send({ id: 1 })
+            .end((err, res) => {
+                planetModel.findOne = originalFindOne;
+                global.alert = originalAlert;
+
+                res.should.have.status(200);
+                res.text.should.eql('Error in Planet Data');
+                done();
+            });
+    });
 });
