@@ -79,7 +79,22 @@ const planetSchema = new mongoose.Schema({
 const Planet = mongoose.model("planets", planetSchema);
 
 async function seed() {
-  const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/solar-system";
+  const rawUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/solar-system";
+  const uri = rawUri.trim();
+
+  if (rawUri !== uri) {
+    console.warn("MONGO_URI contained leading or trailing whitespace and was trimmed.");
+  }
+
+  if (uri.includes("<db_password>")) {
+    throw new Error("MONGO_URI still contains the Atlas placeholder <db_password>.");
+  }
+
+  if (uri.includes('"')) {
+    throw new Error("MONGO_URI contains quote characters. Export the raw URI without wrapping quotes inside the value.");
+  }
+
+  console.log(`Using MONGO_URI: ${JSON.stringify(uri)}`);
 
   await mongoose.connect(uri, {
     user: process.env.MONGO_USERNAME,
