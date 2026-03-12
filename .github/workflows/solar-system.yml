@@ -1,11 +1,20 @@
 name: Solar System App CICD Workflow
 
+### Trigger the workflow
 on:
     workflow_dispatch:
     push:
         branches:
             - main
             - 'feature/*'
+
+### Environment Variables
+
+env:
+    MONGO_URI: ${{ vars.MONGO_URI }}
+    MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+    MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+
 
 jobs:
 
