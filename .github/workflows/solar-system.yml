@@ -35,6 +35,13 @@ jobs:
         - name: Install Dependencies
           run: npm install
 
+        - name: Check env presence
+          run: |
+            echo "MONGO_URI is set: ${{ env.MONGO_URI != '' }}"
+            echo "MONGO_USERNAME is set: ${{ env.MONGO_USERNAME != '' }}"
+            echo "MONGO_PASSWORD is set: ${{ env.MONGO_PASSWORD != '' }}"
+
+
         - name: Unit Testing
           run: npm test
 
