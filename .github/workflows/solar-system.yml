@@ -1,48 +1,54 @@
 name: Solar System App CICD Workflow
 
-### Trigger the workflow
+### Trigger on branch
 on:
-    workflow_dispatch:
-    push:
-        branches:
-            - main
-            - 'feature/*'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'feature/*'
 
-### Environment Variables
-
+### Environment variables from Github secrets/variables
 env:
-    MONGO_URI: ${{ vars.MONGO_URI }}
-    MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
-    MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
-
+  MONGO_URI: ${{ vars.MONGO_URI }}
+  MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
+  MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
 
 jobs:
 
-### Unit Testing Section 
+ ### Unit Testing and uploading the artifact
 
-    unit-testing:
-        name: Unit Testing
-        runs-on: ubuntu-latest
-        steps:
-        - name: Checkout Repository
-          uses: actions/checkout@v4
+  unit-testing:
+    name: Unit Testing
+    runs-on: ${{ matrix.operating_system }}
 
-        - name: Setup NodeJs version - 18
-          uses: actions/setup-node@v3
-          with:
-            node-version: 18
+### Matrix testing on different node.js version and OS    
 
-        - name: Install Dependencies
-          run: npm install
+    strategy:
+      matrix:
+        nodejs_version: [18, 19, 20]
+        operating_system: [ubuntu-latest, macos-latest]
+        exclude:
+          - nodejs_version: 18
+            operating_system: macos-latest
 
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-        - name: Unit Testing
-          run: npm test
+      - name: Setup NodeJs version - ${{ matrix.nodejs_version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.nodejs_version }}
 
-        - name: Archive Test Result
-          uses: actions/upload-artifact@v4
-          with:
-            name: Mocha-Test-Result
-            path: test-results.xml
+      - name: Install Dependencies
+        run: npm install
 
-        
+      - name: Run Unit Tests
+        run: npm test
+
+      - name: Archive Test Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mocha-Test-Result-${{ matrix.nodejs_version }}-${{ matrix.operating_system }}
+          path: test-results.xml
