@@ -16,14 +16,11 @@ env:
 
 jobs:
 
- ### Unit Testing and uploading the artifact
-
+ ### Unit Testing and uploading the artifact with Matrix testing on different node.js version and OS 
   unit-testing:
     name: Unit Testing
     runs-on: ${{ matrix.operating_system }}
-
-### Matrix testing on different node.js version and OS    
-
+   
     strategy:
       matrix:
         nodejs_version: [18, 19, 20]
@@ -31,7 +28,6 @@ jobs:
         exclude:
           - nodejs_version: 18
             operating_system: macos-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -52,3 +48,32 @@ jobs:
         with:
           name: Mocha-Test-Result-${{ matrix.nodejs_version }}-${{ matrix.operating_system }}
           path: test-results.xml
+          retention-days: 5
+
+### Code-coverage and uploading the artifact
+  code-coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup NodeJs version - 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Check Code Coverage
+        run: npm run coverage
+
+      - name: Archive Test Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: Code-Coverage-Result
+          path: coverage
+          retention-days: 5
+
+      
