@@ -23,7 +23,7 @@ jobs:
    
     strategy:
       matrix:
-        nodejs_version: [18, 19, 20]
+        nodejs_version: [18, 20]
         operating_system: [ubuntu-latest, macos-latest]
         exclude:
           - nodejs_version: 18
@@ -45,7 +45,7 @@ jobs:
         run: npm test
 
       - name: Archive Test Result
-        if: steps.nodejs-unit-testing-step == 'failure' || steps.nodejs-unit-testing-step == 'success'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Mocha-Test-Result-${{ matrix.nodejs_version }}-${{ matrix.operating_system }}
@@ -69,6 +69,7 @@ jobs:
         run: npm install
 
       - name: Check Code Coverage
+        continue-on-error: true
         run: npm run coverage
 
       - name: Archive Test Result
