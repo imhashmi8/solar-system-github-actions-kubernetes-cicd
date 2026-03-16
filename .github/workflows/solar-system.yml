@@ -13,6 +13,8 @@ env:
   MONGO_URI: ${{ vars.MONGO_URI }}
   MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
   MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+  NAMESPACE: development
+  REPLICAS: 1
 
 jobs:
 
@@ -146,5 +148,25 @@ jobs:
           push: true
           tags: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{github.sha}}
 
+### Deploy to AKS Dev Cluster
+  aks-deploy-dev:
+    name: Deploy to AKS
+    needs: [docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      
+      - name: Setup kubectl CLI
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.33.0'
+
+      - name: Configure kubeconfig
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{secrets.KUBECONFIG}}
+
+      - name: Create namespace
+        run: kubectl get ns
