@@ -206,8 +206,8 @@ jobs:
       - name: Replace Placeholder in K8s Manifest files
         uses: cschleiden/replace-tokens@v1
         with:
-          tokenPrefix: '_{_'
-          tokenSuffix: '_}_'
+          tokenPrefix: '{'
+          tokenSuffix: '}'
           files: '["kubernetes/development/*.yaml"]'
         env:
           NAMESPACE: ${{ vars.NAMESPACE }}
