@@ -210,7 +210,23 @@ jobs:
           K8S_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
           INGRESS_IP: ${{ env.INGRESS_IP }}
 
-      - name: Replace Placeholder Verification
+      - name: Create namespace
+        run: kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create MongoDB Secret
         run: |
-          cat kubernetes/development/*.yaml
-          
+          kubectl create secret generic mongo-db-creds \
+            --namespace "$NAMESPACE" \
+            --from-literal=MONGO_URI="${{ vars.MONGO_URI }}" \
+            --from-literal=MONGO_USERNAME="${{ vars.MONGO_USERNAME }}" \
+            --from-literal=MONGO_PASSWORD="${{ secrets.MONGO_PASSWORD }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy development manifests
+        run: kubectl apply -f kubernetes/development/
+
+      - name: Verify development deployment
+        run: |
+          kubectl rollout status deployment/solar-system --namespace "$NAMESPACE" --timeout=180s
+          kubectl get all --namespace "$NAMESPACE"
+          kubectl get ingress solar-system --namespace "$NAMESPACE"
