@@ -168,12 +168,41 @@ jobs:
         with:
           method: kubeconfig
           kubeconfig: ${{secrets.KUBECONFIG}}
-      
-      - name: Save Nginx Ingress Controller IP as a GITHUB Environment Variable
-        run: |
-          echo "INGRESS_IP=$(kubectl -n ingress-nginx get services ingress-nginx-controller -o jsonpath="{.status.loadBalancer.ingress[0].ip}")" >> $GITHUB_ENV
-      
 
+      - name: Install envsubst
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+
+      - name: Install ingress-nginx controller
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.14.0/deploy/static/provider/cloud/deploy.yaml
+          kubectl wait \
+            --namespace ingress-nginx \
+            --for=condition=Available deployment/ingress-nginx-controller \
+            --timeout=300s
+
+      - name: Get ingress controller external IP
+        run: |
+          for i in {1..30}; do
+            INGRESS_IP=$(kubectl get svc ingress-nginx-controller \
+              --namespace ingress-nginx \
+              -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+            if [ -n "$INGRESS_IP" ]; then
+              echo "INGRESS_IP=$INGRESS_IP" >> "$GITHUB_ENV"
+              echo "Ingress controller IP: $INGRESS_IP"
+              exit 0
+            fi
+
+            echo "Waiting for ingress external IP..."
+            sleep 10
+          done
+
+          echo "Ingress controller external IP was not assigned in time."
+          exit 1
+      
+  
       - name: Replace Placeholder in K8s Manifest files
         uses: cschleiden/replace-tokens@v1
         with:
