@@ -13,9 +13,6 @@ env:
   MONGO_URI: ${{ vars.MONGO_URI }}
   MONGO_USERNAME: ${{ vars.MONGO_USERNAME }}
   MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
-  NAMESPACE: development
-  REPLICAS: 1
-  INGRESS_IP: ${{ vars.INGRESS_IP }}
 
 jobs:
 
@@ -151,7 +148,9 @@ jobs:
 
 ### Deploy to AKS Dev Cluster
   aks-deploy-dev:
-    name: Deploy to AKS
+    name: Deploy to Dev AKS
+    environment: 
+      name: development
     needs: [docker]
     runs-on: ubuntu-latest
     steps:
@@ -205,18 +204,18 @@ jobs:
           tokenSuffix: '_}_'
           files: '["kubernetes/development/*.yaml"]'
         env:
-          NAMESPACE: ${{ env.NAMESPACE }}
-          REPLICAS: ${{ env.REPLICAS }}
+          NAMESPACE: development
+          REPLICAS: 1
           K8S_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
           INGRESS_IP: ${{ env.INGRESS_IP }}
 
       - name: Create namespace
-        run: kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+        run: kubectl create namespace development --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create MongoDB Secret
         run: |
           kubectl create secret generic mongo-db-creds \
-            --namespace "$NAMESPACE" \
+            --namespace development \
             --from-literal=MONGO_URI="${{ vars.MONGO_URI }}" \
             --from-literal=MONGO_USERNAME="${{ vars.MONGO_USERNAME }}" \
             --from-literal=MONGO_PASSWORD="${{ secrets.MONGO_PASSWORD }}" \
@@ -227,6 +226,138 @@ jobs:
 
       - name: Verify development deployment
         run: |
-          kubectl rollout status deployment/solar-system --namespace "$NAMESPACE" --timeout=180s
-          kubectl get all --namespace "$NAMESPACE"
-          kubectl get ingress solar-system --namespace "$NAMESPACE"
+          kubectl rollout status deployment/solar-system --namespace development --timeout=180s
+          kubectl get all --namespace development
+          kubectl get ingress solar-system --namespace development
+
+      - name: Smoke test development endpoint
+        run: |
+          APP_HOST=$(kubectl get ingress solar-system \
+            --namespace development \
+            -o jsonpath='{.spec.rules[0].host}')
+
+          if [ -z "$APP_HOST" ]; then
+            echo "Application host not found in ingress."
+            exit 1
+          fi
+
+          echo "Testing http://$APP_HOST/live"
+
+          for i in {1..18}; do
+            RESPONSE=$(curl -sS --max-time 10 "http://$APP_HOST/live" || true)
+
+            if echo "$RESPONSE" | grep -q '"status":"live"'; then
+              echo "Development smoke test passed."
+              exit 0
+            fi
+
+            echo "Waiting for development endpoint..."
+            sleep 10
+          done
+
+          echo "Development smoke test failed."
+          exit 1
+
+### Deploy to AKS Production Cluster
+  aks-deploy-production:
+    name: Deploy to Production AKS
+    if: github.ref == 'refs/heads/main'
+    needs: [aks-deploy-dev]
+    runs-on: ubuntu-latest
+    environment: 
+      name: production
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl CLI
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.33.0'
+
+      - name: Configure kubeconfig
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{secrets.KUBECONFIG}}
+
+      - name: Get ingress controller external IP
+        run: |
+          for i in {1..30}; do
+            INGRESS_IP=$(kubectl get svc ingress-nginx-controller \
+              --namespace ingress-nginx \
+              -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+            if [ -n "$INGRESS_IP" ]; then
+              echo "INGRESS_IP=$INGRESS_IP" >> "$GITHUB_ENV"
+              echo "Ingress controller IP: $INGRESS_IP"
+              exit 0
+            fi
+
+            echo "Waiting for ingress external IP..."
+            sleep 10
+          done
+
+          echo "Ingress controller external IP was not assigned in time."
+          exit 1
+
+      - name: Replace Placeholder in Production K8s Manifest files
+        uses: cschleiden/replace-tokens@v1
+        with:
+          tokenPrefix: '_{_'
+          tokenSuffix: '_}_'
+          files: '["kubernetes/production/*.yaml"]'
+        env:
+          NAMESPACE: production
+          REPLICAS: 1
+          K8S_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
+          INGRESS_IP: ${{ env.INGRESS_IP }}
+
+      - name: Create production namespace
+        run: kubectl create namespace production --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create production MongoDB Secret
+        run: |
+          kubectl create secret generic mongo-db-creds \
+            --namespace production \
+            --from-literal=MONGO_URI="${{ vars.MONGO_URI }}" \
+            --from-literal=MONGO_USERNAME="${{ vars.MONGO_USERNAME }}" \
+            --from-literal=MONGO_PASSWORD="${{ secrets.MONGO_PASSWORD }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy production manifests
+        run: kubectl apply -f kubernetes/production/
+
+      - name: Verify production deployment
+        run: |
+          kubectl rollout status deployment/solar-system --namespace production --timeout=180s
+          kubectl get all --namespace production
+          kubectl get ingress solar-system --namespace production
+
+      - name: Smoke test production endpoint
+        run: |
+          APP_HOST=$(kubectl get ingress solar-system \
+            --namespace production \
+            -o jsonpath='{.spec.rules[0].host}')
+
+          if [ -z "$APP_HOST" ]; then
+            echo "Application host not found in ingress."
+            exit 1
+          fi
+
+          echo "Testing http://$APP_HOST/live"
+
+          for i in {1..18}; do
+            RESPONSE=$(curl -sS --max-time 10 "http://$APP_HOST/live" || true)
+
+            if echo "$RESPONSE" | grep -q '"status":"live"'; then
+              echo "Production smoke test passed."
+              exit 0
+            fi
+
+            echo "Waiting for production endpoint..."
+            sleep 10
+          done
+
+          echo "Production smoke test failed."
+          exit 1
