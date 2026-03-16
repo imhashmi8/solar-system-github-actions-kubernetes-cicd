@@ -230,7 +230,7 @@ jobs:
           kubectl get all --namespace development
           kubectl get ingress solar-system --namespace development
 
-      - name: Smoke test development endpoint
+      - name: Testing development endpoint
         run: |
           APP_HOST=$(kubectl get ingress solar-system \
             --namespace development \
@@ -247,7 +247,7 @@ jobs:
             RESPONSE=$(curl -sS --max-time 10 "http://$APP_HOST/live" || true)
 
             if echo "$RESPONSE" | grep -q '"status":"live"'; then
-              echo "Development smoke test passed."
+              echo "Development test passed."
               exit 0
             fi
 
@@ -255,7 +255,7 @@ jobs:
             sleep 10
           done
 
-          echo "Development smoke test failed."
+          echo "Development test failed."
           exit 1
 
 ### Deploy to AKS Production Cluster
@@ -334,7 +334,7 @@ jobs:
           kubectl get all --namespace production
           kubectl get ingress solar-system --namespace production
 
-      - name: Smoke test production endpoint
+      - name: Testing production endpoint
         run: |
           APP_HOST=$(kubectl get ingress solar-system \
             --namespace production \
@@ -351,7 +351,7 @@ jobs:
             RESPONSE=$(curl -sS --max-time 10 "http://$APP_HOST/live" || true)
 
             if echo "$RESPONSE" | grep -q '"status":"live"'; then
-              echo "Production smoke test passed."
+              echo "Production test passed."
               exit 0
             fi
 
@@ -359,5 +359,5 @@ jobs:
             sleep 10
           done
 
-          echo "Production smoke test failed."
+          echo "Production test failed."
           exit 1
